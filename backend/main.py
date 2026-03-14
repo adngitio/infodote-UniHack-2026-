@@ -3,15 +3,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 import requests
-import google.generativeai as genai
 from elasticsearch import Elasticsearch
 from sentence_transformers import SentenceTransformer
 import json
+import traceback
+import sys
 
-# Load environment variables
-load_dotenv()
+# Load .env from the backend directory (works regardless of cwd when starting uvicorn)
+_backend_dir = Path(__file__).resolve().parent
+load_dotenv(_backend_dir / ".env")
 
 app = FastAPI(title="Infodote API", description="AI-powered debunking and digital literacy tool")
 
@@ -24,21 +27,47 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize AI and Search Clients
+# Initialize AI and Search Clients (read from env after load_dotenv)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 ELASTIC_URL = os.getenv("ELASTIC_URL")
 ELASTIC_API_KEY = os.getenv("ELASTIC_API_KEY")
 
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-1.5-pro')
+if not GEMINI_API_KEY or not GEMINI_API_KEY.strip():
+    raise RuntimeError(
+        "GEMINI_API_KEY is not set. Add it to backend/.env (no quotes needed). "
+        "Get a key at https://aistudio.google.com/apikey"
+    )
 
-es = Elasticsearch(
-    ELASTIC_URL,
-    api_key=ELASTIC_API_KEY
-)
+# Gemini 2.0 Flash via REST (base URL: https://generativelanguage.googleapis.com)
+GEMINI_MODEL = "gemini-2.0-flash"
+GEMINI_API_BASE = "https://generativelanguage.googleapis.com"
+GEMINI_API_URL = f"{GEMINI_API_BASE}/v1beta/models"
+_last_gemini_model_used: Optional[str] = None
+_last_es_error: Optional[str] = None
 
-# Load embedding model for semantic search
+# Elasticsearch optional: only connect if env is set; app works without it (Gemini still runs)
+es: Optional[Elasticsearch] = None
+if ELASTIC_URL and ELASTIC_API_KEY and str(ELASTIC_URL).strip() and str(ELASTIC_API_KEY).strip():
+    try:
+        es = Elasticsearch(ELASTIC_URL.strip(), api_key=ELASTIC_API_KEY.strip())
+        es.ping()
+        print("[Infodote] Elasticsearch connected.", flush=True)
+    except Exception as e:
+        _last_es_error = str(e)
+        es = None
+        print(f"[Infodote] Elasticsearch skipped (will run without sources): {e}", flush=True)
+else:
+    es = None
+    print("[Infodote] Elasticsearch not configured (ELASTIC_URL/ELASTIC_API_KEY). Analysis will run without sources.", flush=True)
+
+# Load embedding model for semantic search (local only - no API calls)
 embed_model = SentenceTransformer('all-MiniLM-L6-v2')
+
+# In-memory cache: avoid hitting Gemini for repeated claims (e.g. example chips during demo)
+_analysis_cache: dict[str, dict] = {}
+
+def _cache_key(claim: str) -> str:
+    return claim.strip().lower()
 
 class AnalysisRequest(BaseModel):
     claim: str
@@ -62,6 +91,30 @@ class AnalysisResponse(BaseModel):
     provocation_score: int
     sources: List[SourceMatch]
 
+def _gemini_generate_text(prompt: str) -> str:
+    """Call Gemini 2.0 Flash via REST API."""
+    global _last_gemini_model_used
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": 0.3, "maxOutputTokens": 2048},
+    }
+    headers = {"Content-Type": "application/json"}
+    url = f"{GEMINI_API_URL}/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
+    print(f"[Infodote] Calling Gemini API: model={GEMINI_MODEL} url={GEMINI_API_BASE}", flush=True)
+    r = requests.post(url, headers=headers, json=payload, timeout=60)
+    r.raise_for_status()
+    data = r.json()
+    _last_gemini_model_used = GEMINI_MODEL
+    candidates = data.get("candidates") or []
+    if not candidates:
+        raise ValueError("No candidates in response", data.get("promptFeedback", data))
+    parts = candidates[0].get("content", {}).get("parts") or []
+    text = (parts[0].get("text") or "").strip() if parts else ""
+    if not text:
+        raise ValueError("Empty text in response", data)
+    return text
+
+
 def get_gemini_analysis(claim: str, context_sources: List[dict]):
     prompt = f"""
     Act as a professional fact-checker and digital literacy expert. 
@@ -83,16 +136,14 @@ def get_gemini_analysis(claim: str, context_sources: List[dict]):
         "source_bias": {{ "hostname": 0-100 }} // Map hostnames from provided sources to bias scores
     }}
     """
-    
-    response = model.generate_content(prompt)
     try:
-        # Extract JSON from response
-        content = response.text.strip()
+        content = _gemini_generate_text(prompt).strip()
         if content.startswith("```json"):
             content = content[7:-3].strip()
+        if content.startswith("```"):
+            content = content.split("```", 2)[1].strip()
         return json.loads(content)
-    except:
-        # Fallback if AI fails to return valid JSON
+    except Exception:
         return {
             "verdict": "Unverified",
             "technique": "Unknown",
@@ -108,37 +159,69 @@ def get_gemini_analysis(claim: str, context_sources: List[dict]):
 @app.post("/analyse", response_model=AnalysisResponse)
 async def analyse_claim(request: AnalysisRequest):
     claim = request.claim
-    
+    key = _cache_key(claim)
+
+    # Aggressive cache: return immediately if we've seen this claim (saves Gemini API calls)
+    if key in _analysis_cache:
+        cached = _analysis_cache[key]
+        return AnalysisResponse(**cached)
+
+    # 1. Semantic Search for context (optional; never block Gemini)
+    matches: List[dict] = []
+    global _last_es_error
+    _last_es_error = None
+    if es is not None:
+        try:
+            # Check index exists first (avoid opaque kNN errors)
+            index_exists = False
+            try:
+                index_exists = es.indices.exists(index="news_claims")
+            except Exception:
+                index_exists = False
+            if not index_exists:
+                _last_es_error = "Index 'news_claims' does not exist. Create it with a dense_vector field 'vector' (dimension 384 for all-MiniLM-L6-v2)."
+                print(f"[Infodote] {_last_es_error}", flush=True)
+            else:
+                query_vector = embed_model.encode(claim).tolist()
+                search_query = {
+                    "knn": {
+                        "field": "vector",
+                        "query_vector": query_vector,
+                        "k": 5,
+                        "num_candidates": 100
+                    }
+                }
+                res = es.search(index="news_claims", body=search_query)
+                hits = res.get("hits", {}).get("hits", [])
+                matches = []
+                for hit in hits:
+                    try:
+                        src = hit.get("_source", {})
+                        matches.append({
+                            "claim": src.get("claim", ""),
+                            "source": src.get("source", ""),
+                            "url": src.get("url", ""),
+                            "score": hit.get("_score", 0.0)
+                        })
+                    except Exception:
+                        continue
+                n = len(matches)
+                if n == 0:
+                    _last_es_error = "Index 'news_claims' exists but search returned 0 hits (empty index or wrong mapping?)."
+                    print(f"[Infodote] Elasticsearch search returned 0 hits. {_last_es_error}", flush=True)
+                else:
+                    print(f"[Infodote] Elasticsearch search returned {n} source(s).", flush=True)
+        except Exception as es_err:
+            _last_es_error = f"{type(es_err).__name__}: {es_err}"
+            print(f"[Infodote] Elasticsearch search failed (continuing without sources): {_last_es_error}", flush=True)
+
+    # 2. Always call Gemini (with or without source context)
     try:
-        # 1. Semantic Search for context
-        query_vector = embed_model.encode(claim).tolist()
-        
-        search_query = {
-            "knn": {
-                "field": "vector",
-                "query_vector": query_vector,
-                "k": 5,
-                "num_candidates": 100
-            }
-        }
-        
-        res = es.search(index="news_claims", body=search_query)
-        matches = [
-            {
-                "claim": hit["_source"]["claim"],
-                "source": hit["_source"]["source"],
-                "url": hit["_source"]["url"],
-                "score": hit["_score"]
-            }
-            for hit in res["hits"]["hits"]
-        ]
-        
-        # 2. AI Reasoning with Context
         analysis = get_gemini_analysis(claim, matches)
         
         source_bias = analysis.get("source_bias", {})
-        
-        return {
+
+        response_payload = {
             "claim": claim,
             "verdict": analysis["verdict"],
             "technique": analysis["technique"],
@@ -156,18 +239,83 @@ async def analyse_claim(request: AnalysisRequest):
                     "similarity_score": min(1.0, m["score"]),
                     "bias_score": source_bias.get(m["source"], 50)
                 }
-                for m in matches[:3] # Top 3 sources
+                for m in matches[:3]  # Top 3 sources
             ]
         }
+        _analysis_cache[key] = response_payload
+        return AnalysisResponse(**response_payload)
     except Exception as e:
+        traceback.print_exc(file=sys.stderr)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/health")
 async def health_check():
+    es_ok = False
+    if es is not None:
+        try:
+            es_ok = es.ping()
+        except Exception:
+            pass
     return {
         "status": "healthy",
-        "elasticsearch": es.ping(),
+        "elasticsearch": es_ok,
         "metadata": "Infodote Analysis Engine 1.0"
+    }
+
+
+# Vector dimension from sentence-transformers all-MiniLM-L6-v2
+VECTOR_DIM = 384
+
+@app.post("/create-news-claims-index")
+async def create_news_claims_index():
+    """Create the news_claims index with dense_vector mapping so kNN search works. Safe to call if index exists."""
+    if es is None:
+        raise HTTPException(status_code=503, detail="Elasticsearch not configured")
+    try:
+        if es.indices.exists(index="news_claims"):
+            return {"message": "Index 'news_claims' already exists", "created": False}
+        body = {
+            "mappings": {
+                "properties": {
+                    "claim": {"type": "text"},
+                    "source": {"type": "keyword"},
+                    "url": {"type": "keyword"},
+                    "vector": {
+                        "type": "dense_vector",
+                        "dims": VECTOR_DIM,
+                        "index": True,
+                        "similarity": "cosine"
+                    }
+                }
+            }
+        }
+        es.indices.create(index="news_claims", body=body)
+        print("[Infodote] Created index 'news_claims' with vector field (dim=384). Add documents to see sources.", flush=True)
+        return {"message": "Index 'news_claims' created. Add documents with claim, source, url, and vector (length 384) to see sources.", "created": True}
+    except Exception as e:
+        traceback.print_exc(file=sys.stderr)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api-status")
+async def api_status():
+    """Verify env and whether Gemini has been called. No secrets exposed."""
+    es_ok = False
+    if es is not None:
+        try:
+            es_ok = es.ping()
+        except Exception:
+            pass
+    return {
+        "gemini_configured": bool(GEMINI_API_KEY and GEMINI_API_KEY.strip()),
+        "gemini_model": GEMINI_MODEL,
+        "gemini_base_url": GEMINI_API_BASE,
+        "last_gemini_model_used": _last_gemini_model_used,
+        "elastic_configured": bool(ELASTIC_URL and ELASTIC_API_KEY),
+        "elasticsearch_connected": es is not None,
+        "elasticsearch_reachable": es_ok,
+        "last_elasticsearch_error": _last_es_error,
+        "cache_size": len(_analysis_cache),
     }
 
 if __name__ == "__main__":

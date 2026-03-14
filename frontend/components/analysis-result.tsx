@@ -109,22 +109,28 @@ export function AnalysisResult({ data, claim, density = "detailed", className }:
         </CardContent>
       </Card>
 
-      {/* Matched Sources */}
-      {data.matchedSources.length > 0 && (
-        <Card className="bg-white/5 border-white/10 shadow-lg backdrop-blur-md">
-          <CardHeader className="pb-3 border-b border-white/5">
-            <CardTitle className="text-xs font-light tracking-widest text-neutral-500 flex items-center gap-2 uppercase">
-              <Shield className="h-4 w-4" />
-              Verified Sources ({data.matchedSources.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-4 space-y-3">
-            {data.matchedSources.map((source, index) => (
+      {/* Matched Sources — show section even when empty so user knows why */}
+      <Card className="bg-white/5 border-white/10 shadow-lg backdrop-blur-md">
+        <CardHeader className="pb-3 border-b border-white/5">
+          <CardTitle className="text-xs font-light tracking-widest text-neutral-500 flex items-center gap-2 uppercase">
+            <Shield className="h-4 w-4" />
+            {data.matchedSources.length > 0
+              ? `Verified Sources (${data.matchedSources.length})`
+              : "Sources"}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-4 space-y-3">
+          {data.matchedSources.length > 0 ? (
+            data.matchedSources.map((source, index) => (
               <SourceCard key={index} {...source} />
-            ))}
-          </CardContent>
-        </Card>
-      )}
+            ))
+          ) : (
+            <p className="text-sm text-neutral-500 font-light">
+              No external sources were used for this analysis. The explanation and guide above are from the AI (Gemini 2.0 Flash). Context search (e.g. Elasticsearch) was unavailable or returned no matches.
+            </p>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

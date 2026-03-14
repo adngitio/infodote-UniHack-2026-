@@ -51,14 +51,17 @@ export function HistorySidebar({
         {!collapsed && (
           <div className="flex flex-col flex-1 px-3 py-4 min-h-0">
             {/* Label */}
-            <p className="px-1 mb-2 text-[10px] font-light tracking-widest text-neutral-500 uppercase">
+            <p className="px-1 mb-2 text-xs font-light tracking-widest text-neutral-500 uppercase">
               Past Claims
             </p>
 
-            {/* History list */}
-            <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto min-h-0 pr-0.5 custom-scrollbar">
+            {/* History list - suppressHydrationWarning: client may add inline styles (scrollbar/extension) */}
+            <nav
+              className="flex flex-col gap-0.5 flex-1 overflow-y-auto min-h-0 pr-0.5 custom-scrollbar"
+              suppressHydrationWarning
+            >
               {history.length === 0 && (
-                <p className="text-[11px] text-neutral-700 font-light px-2 py-4 text-center">
+                <p className="text-sm text-neutral-700 font-light px-2 py-4 text-center">
                   No analyses yet.<br />Submit a claim to begin.
                 </p>
               )}
@@ -76,10 +79,10 @@ export function HistorySidebar({
                   <div className="flex items-start gap-2">
                     <span className={cn("mt-[5px] h-1.5 w-1.5 rounded-full shrink-0", verdictDot(item.verdict))} />
                     <div className="min-w-0 flex-1">
-                      <p className="text-[11px] text-white font-light line-clamp-2 leading-relaxed">
+                      <p className="text-[13px] text-white font-light line-clamp-2 leading-relaxed">
                         {item.claim}
                       </p>
-                      <p className="mt-0.5 text-[9px] text-neutral-600 font-light">
+                      <p className="mt-0.5 text-[11px] text-neutral-600 font-light">
                         {new Date(item.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                       </p>
                     </div>
@@ -95,7 +98,7 @@ export function HistorySidebar({
                 className="flex items-center gap-2 w-full px-3 py-2.5 rounded-xl text-neutral-500 hover:text-white hover:bg-white/5 border border-transparent hover:border-white/10 transition-all font-light"
               >
                 <Settings className="h-4 w-4 shrink-0" />
-                <span className="text-xs">Settings</span>
+                <span className="text-sm">Settings</span>
               </button>
             </div>
           </div>
