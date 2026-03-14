@@ -7,7 +7,8 @@ interface SourceCardProps {
   title: string
   url: string
   snippet: string
-  relevanceScore: number
+  verdict: string
+  similarityScore?: number
   className?: string
 }
 
@@ -15,10 +16,12 @@ export function SourceCard({
   title,
   url,
   snippet,
-  relevanceScore,
+  verdict,
+  similarityScore,
   className,
 }: SourceCardProps) {
   const domain = new URL(url).hostname.replace("www.", "")
+  const matchPct = similarityScore != null ? Math.round(similarityScore * 100) : null
 
   return (
     <a
@@ -38,8 +41,13 @@ export function SourceCard({
               {domain}
             </span>
             <span className="text-xs text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-              {Math.round(relevanceScore * 100)}% match
+              {verdict}
             </span>
+            {matchPct != null && (
+              <span className="ml-auto text-xs text-muted-foreground flex-shrink-0">
+                {matchPct}% match
+              </span>
+            )}
           </div>
           <h4 className="font-medium text-foreground group-hover:text-primary transition-colors line-clamp-1">
             {title}
@@ -47,6 +55,14 @@ export function SourceCard({
           <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
             {snippet}
           </p>
+          {matchPct != null && (
+            <div className="mt-2 h-1 w-full rounded-full bg-muted overflow-hidden">
+              <div
+                className="h-full rounded-full bg-primary/60"
+                style={{ width: `${matchPct}%` }}
+              />
+            </div>
+          )}
         </div>
         <ExternalLink className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors flex-shrink-0 mt-1" />
       </div>

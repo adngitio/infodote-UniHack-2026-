@@ -73,14 +73,16 @@ def search_factchecks(claim: str, top_k: int = 5):
             "size": top_k
         }
     )
+    hits = response["hits"]["hits"]
+    max_score = hits[0]["_score"] if hits else 1
     results = []
-    for hit in response["hits"]["hits"]:
+    for hit in hits:
         results.append({
             "claim": hit["_source"]["claim"],
             "verdict": hit["_source"]["verdict"],
             "source": hit["_source"]["source"],
             "url": hit["_source"]["url"],
-            "score": hit["_score"]
+            "score": round(hit["_score"] / max_score, 2) if max_score else 0
         })
     return results
 
@@ -166,9 +168,10 @@ def analyse(request: ClaimRequest):
                 "claim": m["claim"],
                 "verdict": m["verdict"],
                 "source": m["source"],
-                "url": m["url"]
+                "url": m["url"],
+                "similarity_score": m["score"]
             }
-            for m in matches[:3]
+            for m in matches
         ]
     }
 
