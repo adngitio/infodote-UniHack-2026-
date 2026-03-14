@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { ClaimInput } from "@/components/claim-input"
 import { ExampleChips } from "@/components/example-chips"
 import { AnalysisResult, type AnalysisData } from "@/components/analysis-result"
@@ -20,15 +20,22 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false)
   const [result, setResult] = useState<AnalysisData | null>(null)
   const [analyzedClaim, setAnalyzedClaim] = useState("")
-<<<<<<< Updated upstream
-  const [error, setError] = useState<string | null>(null)
-=======
-<<<<<<< Updated upstream
-=======
   const [error, setError] = useState<string | null>(null)
   const [randomQuote, setRandomQuote] = useState(quotes[0])
->>>>>>> Stashed changes
->>>>>>> Stashed changes
+
+  const cycleQuote = useCallback(() => {
+    setRandomQuote(q => {
+      const others = quotes.filter(x => x !== q)
+      return others[Math.floor(Math.random() * others.length)]
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!isLoading) return
+    const handler = () => cycleQuote()
+    window.addEventListener("keydown", handler)
+    return () => window.removeEventListener("keydown", handler)
+  }, [isLoading, cycleQuote])
 
   const handleAnalyze = async (claim: string) => {
     setIsLoading(true)

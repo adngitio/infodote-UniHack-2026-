@@ -23,12 +23,22 @@ export function ClaimInput({ onSubmit, isLoading, className }: ClaimInputProps) 
     }
   }
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault()
+      if (claim.trim() && !isLoading) {
+        onSubmit(claim.trim())
+      }
+    }
+  }
+
   return (
     <form onSubmit={handleSubmit} className={cn("w-full", className)}>
       <div className="relative">
         <Textarea
           value={claim}
           onChange={(e) => setClaim(e.target.value)}
+          onKeyDown={handleKeyDown}
           placeholder="Enter a claim to analyze... e.g., '5G towers cause health problems'"
           className="min-h-[160px] p-6 pb-20 bg-white/5 backdrop-blur-3xl border border-white/10 text-white placeholder:text-neutral-500 resize-none focus:ring-1 focus:ring-white/20 focus:border-white/20 rounded-2xl text-lg font-light shadow-2xl transition-all"
           disabled={isLoading}
