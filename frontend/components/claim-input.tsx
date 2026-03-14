@@ -40,7 +40,7 @@ export function ClaimInput({ onSubmit, isLoading, className }: ClaimInputProps) 
           onChange={(e) => setClaim(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Enter a claim to analyze... e.g., '5G towers cause health problems'"
-          className="min-h-[160px] p-6 pb-20 bg-white/5 backdrop-blur-3xl border border-white/10 text-white placeholder:text-neutral-500 resize-none focus:ring-1 focus:ring-white/20 focus:border-white/20 rounded-2xl text-lg font-light shadow-2xl transition-all"
+          className="min-h-[160px] p-6 pb-20 bg-white/5 backdrop-blur-3xl border border-white/10 text-white placeholder:text-neutral-500 resize-none focus:ring-1 focus:ring-white/30 focus:border-white/30 rounded-2xl text-lg font-light shadow-2xl transition-all outline-none"
           disabled={isLoading}
         />
         <div className="absolute bottom-3 right-3 flex items-center gap-2">
