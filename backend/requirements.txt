@@ -4,4 +4,4 @@ python-dotenv
 pydantic
 elasticsearch
 sentence-transformers
-google-genai
+anthropic

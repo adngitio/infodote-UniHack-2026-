@@ -29,10 +29,11 @@ interface AnalysisResultProps {
   data: AnalysisData
   claim: string
   density?: "compact" | "detailed"
+  showConfidence?: boolean
   className?: string
 }
 
-export function AnalysisResult({ data, claim, density = "detailed", className }: AnalysisResultProps) {
+export function AnalysisResult({ data, claim, density = "detailed", showConfidence = true, className }: AnalysisResultProps) {
   return (
     <div className={cn("space-y-6", className)}>
       {/* Claim being analyzed */}
@@ -54,8 +55,8 @@ export function AnalysisResult({ data, claim, density = "detailed", className }:
         <TechniquePill technique={data.technique} />
       </div>
 
-      {/* Critical Thinking Scores — hidden in compact mode */}
-      {density === "detailed" && (
+      {/* Critical Thinking Scores — hidden in compact mode or when showConfidence is off */}
+      {density === "detailed" && showConfidence && (
         <Card className="bg-white/5 border-white/10 shadow-lg backdrop-blur-md">
           <CardHeader className="pb-3 border-b border-white/5">
             <CardTitle className="text-xs font-light tracking-widest text-neutral-500 uppercase">
@@ -126,7 +127,7 @@ export function AnalysisResult({ data, claim, density = "detailed", className }:
             ))
           ) : (
             <p className="text-sm text-neutral-500 font-light">
-              No external sources were used for this analysis. The explanation and guide above are from the AI (Gemini 2.0 Flash). Context search (e.g. Elasticsearch) was unavailable or returned no matches.
+              No external sources were used for this analysis. The explanation and guide above are from the AI (Gemini 2.5 Flash). Context search (e.g. Elasticsearch) was unavailable or returned no matches.
             </p>
           )}
         </CardContent>

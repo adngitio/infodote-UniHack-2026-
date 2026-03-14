@@ -42,7 +42,7 @@ function saveHistory(items: HistoryItem[]) {
 }
 
 function HomeInner() {
-  const { autoScroll, density } = useSettings()
+  const { autoScroll, density, theme, fontSize, showConfidence } = useSettings()
   const [isLoading, setIsLoading] = useState(false)
   const [result, setResult] = useState<AnalysisData | null>(null)
   const [analyzedClaim, setAnalyzedClaim] = useState("")
@@ -148,7 +148,7 @@ function HomeInner() {
   const HEADER_H = "h-14"
 
   return (
-    <div className="min-h-screen bg-black text-white selection:bg-neutral-800 flex flex-col">
+    <div data-theme={theme} data-font={fontSize} className="min-h-screen text-white selection:bg-neutral-800 flex flex-col" style={{ backgroundColor: "rgb(var(--background))", color: "rgb(var(--foreground))" }}>
 
       {/* ── Header ────────────────────────────────────────────── */}
       <header className={`${HEADER_H} border-b border-white/5 bg-black/80 backdrop-blur-xl sticky top-0 z-50 flex items-center px-3 gap-3`}>
@@ -280,7 +280,7 @@ function HomeInner() {
                     Analyze Another
                   </button>
                 </div>
-                <AnalysisResult data={result} claim={analyzedClaim} density={density} />
+                <AnalysisResult data={result} claim={analyzedClaim} density={density} showConfidence={showConfidence} />
               </section>
             )}
 

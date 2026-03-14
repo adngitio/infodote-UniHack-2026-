@@ -20,7 +20,8 @@ export function SourceCard({
   biasScore,
   className,
 }: SourceCardProps) {
-  const domain = new URL(url).hostname.replace("www.", "")
+  let domain = url
+  try { domain = new URL(url).hostname.replace("www.", "") } catch {}
 
   return (
     <a
@@ -56,7 +57,7 @@ export function SourceCard({
           <div className="mt-3 space-y-1">
             <div className="flex items-baseline justify-between">
               <span className="text-[10px] tracking-widest text-neutral-600 uppercase font-light">Source Bias</span>
-              <span className="text-[10px] text-neutral-500">{biasScore}<sup className="text-[8px]">th</sup></span>
+              <span className="text-[10px] text-neutral-500">{biasScore}<sup className="text-[8px]">%</sup></span>
             </div>
             <div className="h-[2px] w-full rounded-full bg-white/5">
               <div

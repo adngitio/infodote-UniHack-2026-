@@ -131,6 +131,8 @@
 [data-theme="light"] .group-hover\:text-neutral-400:hover { color: #666 !important; }
 [data-theme="light"] .bg-black\/20 { background-color: rgba(0,0,0,.06) !important; }
 [data-theme="light"] .hover\:bg-neutral-700:hover { background-color: #c7c7cc !important; }
+[data-theme="light"] .from-white { --tw-gradient-from: #1d1d1f !important; }
+[data-theme="light"] .to-neutral-500 { --tw-gradient-to: #6e6e73 !important; }
 
 @theme inline {
   --color-background: rgb(var(--background));

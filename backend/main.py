@@ -5,12 +5,13 @@ from typing import List, Optional
 import os
 from pathlib import Path
 from dotenv import load_dotenv
-import requests
+import anthropic
 from elasticsearch import Elasticsearch
 from sentence_transformers import SentenceTransformer
 import json
 import traceback
 import sys
+from urllib.parse import urlparse
 
 # Load .env from the backend directory (works regardless of cwd when starting uvicorn)
 _backend_dir = Path(__file__).resolve().parent
@@ -28,24 +29,21 @@ app.add_middleware(
 )
 
 # Initialize AI and Search Clients (read from env after load_dotenv)
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 ELASTIC_URL = os.getenv("ELASTIC_URL")
 ELASTIC_API_KEY = os.getenv("ELASTIC_API_KEY")
 
-if not GEMINI_API_KEY or not GEMINI_API_KEY.strip():
+if not ANTHROPIC_API_KEY or not ANTHROPIC_API_KEY.strip():
     raise RuntimeError(
-        "GEMINI_API_KEY is not set. Add it to backend/.env (no quotes needed). "
-        "Get a key at https://aistudio.google.com/apikey"
+        "ANTHROPIC_API_KEY is not set. Add it to backend/.env (no quotes needed)."
     )
 
-# Gemini 2.0 Flash via REST (base URL: https://generativelanguage.googleapis.com)
-GEMINI_MODEL = "gemini-2.0-flash"
-GEMINI_API_BASE = "https://generativelanguage.googleapis.com"
-GEMINI_API_URL = f"{GEMINI_API_BASE}/v1beta/models"
-_last_gemini_model_used: Optional[str] = None
+CLAUDE_MODEL = "claude-haiku-4-5"
+claude_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY.strip())
+_last_claude_model_used: Optional[str] = None
 _last_es_error: Optional[str] = None
 
-# Elasticsearch optional: only connect if env is set; app works without it (Gemini still runs)
+# Elasticsearch optional: only connect if env is set; app works without it (Claude still runs)
 es: Optional[Elasticsearch] = None
 if ELASTIC_URL and ELASTIC_API_KEY and str(ELASTIC_URL).strip() and str(ELASTIC_API_KEY).strip():
     try:
@@ -63,7 +61,7 @@ else:
 # Load embedding model for semantic search (local only - no API calls)
 embed_model = SentenceTransformer('all-MiniLM-L6-v2')
 
-# In-memory cache: avoid hitting Gemini for repeated claims (e.g. example chips during demo)
+# In-memory cache: avoid hitting Claude for repeated claims (e.g. example chips during demo)
 _analysis_cache: dict[str, dict] = {}
 
 def _cache_key(claim: str) -> str:
@@ -91,38 +89,15 @@ class AnalysisResponse(BaseModel):
     provocation_score: int
     sources: List[SourceMatch]
 
-def _gemini_generate_text(prompt: str) -> str:
-    """Call Gemini 2.0 Flash via REST API."""
-    global _last_gemini_model_used
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.3, "maxOutputTokens": 2048},
-    }
-    headers = {"Content-Type": "application/json"}
-    url = f"{GEMINI_API_URL}/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
-    print(f"[Infodote] Calling Gemini API: model={GEMINI_MODEL} url={GEMINI_API_BASE}", flush=True)
-    r = requests.post(url, headers=headers, json=payload, timeout=60)
-    r.raise_for_status()
-    data = r.json()
-    _last_gemini_model_used = GEMINI_MODEL
-    candidates = data.get("candidates") or []
-    if not candidates:
-        raise ValueError("No candidates in response", data.get("promptFeedback", data))
-    parts = candidates[0].get("content", {}).get("parts") or []
-    text = (parts[0].get("text") or "").strip() if parts else ""
-    if not text:
-        raise ValueError("Empty text in response", data)
-    return text
-
-
-def get_gemini_analysis(claim: str, context_sources: List[dict]):
+def get_claude_analysis(claim: str, context_sources: List[dict]):
+    global _last_claude_model_used
     prompt = f"""
-    Act as a professional fact-checker and digital literacy expert. 
+    Act as a professional fact-checker and digital literacy expert.
     Analyze the following claim: "{claim}"
-    
+
     Use these search results as context if relevant:
     {json.dumps(context_sources)}
-    
+
     Provide the analysis in the following JSON format ONLY:
     {{
         "verdict": "True" | "False" | "Misleading",
@@ -136,25 +111,20 @@ def get_gemini_analysis(claim: str, context_sources: List[dict]):
         "source_bias": {{ "hostname": 0-100 }} // Map hostnames from provided sources to bias scores
     }}
     """
-    try:
-        content = _gemini_generate_text(prompt).strip()
-        if content.startswith("```json"):
-            content = content[7:-3].strip()
-        if content.startswith("```"):
-            content = content.split("```", 2)[1].strip()
-        return json.loads(content)
-    except Exception:
-        return {
-            "verdict": "Unverified",
-            "technique": "Unknown",
-            "explanation": "Unable to provide a detailed analysis at this time.",
-            "literacy_lesson": "Always evaluate claims from multiple independent sources.",
-            "reasoning": "Internal analysis error occurred.",
-            "bias_score": 50,
-            "soundness_score": 50,
-            "provocation_score": 50,
-            "source_bias": {}
-        }
+    print(f"[Infodote] Calling Claude API: model={CLAUDE_MODEL}", flush=True)
+    response = claude_client.messages.create(
+        model=CLAUDE_MODEL,
+        max_tokens=8192,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    _last_claude_model_used = CLAUDE_MODEL
+    content = next((b.text for b in response.content if b.type == "text"), "").strip()
+    # Extract JSON from anywhere in the response (handles trailing text or markdown fences)
+    start = content.find("{")
+    end = content.rfind("}") + 1
+    if start == -1 or end == 0:
+        raise ValueError(f"No JSON object found in response: {content[:200]}")
+    return json.loads(content[start:end])
 
 @app.post("/analyse", response_model=AnalysisResponse)
 async def analyse_claim(request: AnalysisRequest):
@@ -215,38 +185,40 @@ async def analyse_claim(request: AnalysisRequest):
             _last_es_error = f"{type(es_err).__name__}: {es_err}"
             print(f"[Infodote] Elasticsearch search failed (continuing without sources): {_last_es_error}", flush=True)
 
-    # 2. Always call Gemini (with or without source context)
+    # 2. Always call Claude (with or without source context)
     try:
-        analysis = get_gemini_analysis(claim, matches)
-        
-        source_bias = analysis.get("source_bias", {})
-
-        response_payload = {
-            "claim": claim,
-            "verdict": analysis["verdict"],
-            "technique": analysis["technique"],
-            "explanation": analysis["explanation"],
-            "literacy_lesson": analysis["literacy_lesson"],
-            "reasoning": analysis["reasoning"],
-            "bias_score": analysis.get("bias_score", 50),
-            "soundness_score": analysis.get("soundness_score", 50),
-            "provocation_score": analysis.get("provocation_score", 50),
-            "sources": [
-                {
-                    "claim": m["claim"],
-                    "source": m["source"],
-                    "url": m["url"],
-                    "similarity_score": min(1.0, m["score"]),
-                    "bias_score": source_bias.get(m["source"], 50)
-                }
-                for m in matches[:3]  # Top 3 sources
-            ]
-        }
-        _analysis_cache[key] = response_payload
-        return AnalysisResponse(**response_payload)
+        analysis = get_claude_analysis(claim, matches)
     except Exception as e:
         traceback.print_exc(file=sys.stderr)
-        raise HTTPException(status_code=500, detail=str(e))
+        msg = str(e)
+        if "429" in msg or "rate" in msg.lower():
+            raise HTTPException(status_code=429, detail="Claude API rate limit reached. Please wait a moment and try again.")
+        raise HTTPException(status_code=500, detail=msg)
+
+    source_bias = analysis.get("source_bias", {})
+    response_payload = {
+        "claim": claim,
+        "verdict": analysis["verdict"],
+        "technique": analysis["technique"],
+        "explanation": analysis["explanation"],
+        "literacy_lesson": analysis["literacy_lesson"],
+        "reasoning": analysis["reasoning"],
+        "bias_score": analysis.get("bias_score", 50),
+        "soundness_score": analysis.get("soundness_score", 50),
+        "provocation_score": analysis.get("provocation_score", 50),
+        "sources": [
+            {
+                "claim": m["claim"],
+                "source": m["source"],
+                "url": m["url"],
+                "similarity_score": min(1.0, m["score"]),
+                "bias_score": source_bias.get(urlparse(m["url"]).hostname or m["source"], source_bias.get(m["source"], 50))
+            }
+            for m in matches[:3]
+        ]
+    }
+    _analysis_cache[key] = response_payload
+    return AnalysisResponse(**response_payload)
 
 @app.get("/health")
 async def health_check():
@@ -299,7 +271,7 @@ async def create_news_claims_index():
 
 @app.get("/api-status")
 async def api_status():
-    """Verify env and whether Gemini has been called. No secrets exposed."""
+    """Verify env and whether Claude has been called. No secrets exposed."""
     es_ok = False
     if es is not None:
         try:
@@ -307,10 +279,9 @@ async def api_status():
         except Exception:
             pass
     return {
-        "gemini_configured": bool(GEMINI_API_KEY and GEMINI_API_KEY.strip()),
-        "gemini_model": GEMINI_MODEL,
-        "gemini_base_url": GEMINI_API_BASE,
-        "last_gemini_model_used": _last_gemini_model_used,
+        "claude_configured": bool(ANTHROPIC_API_KEY and ANTHROPIC_API_KEY.strip()),
+        "claude_model": CLAUDE_MODEL,
+        "last_claude_model_used": _last_claude_model_used,
         "elastic_configured": bool(ELASTIC_URL and ELASTIC_API_KEY),
         "elasticsearch_connected": es is not None,
         "elasticsearch_reachable": es_ok,
