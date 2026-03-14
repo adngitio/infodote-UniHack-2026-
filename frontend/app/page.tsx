@@ -42,7 +42,7 @@ function saveHistory(items: HistoryItem[]) {
 }
 
 function HomeInner() {
-  const { autoScroll, density, theme, fontSize, showConfidence } = useSettings()
+  const { autoScroll, density, theme, fontSize, showConfidence, clearCount } = useSettings()
   const [isLoading, setIsLoading] = useState(false)
   const [result, setResult] = useState<AnalysisData | null>(null)
   const [analyzedClaim, setAnalyzedClaim] = useState("")
@@ -57,6 +57,16 @@ function HomeInner() {
   useEffect(() => {
     setHistory(loadHistory())
   }, [])
+
+  // Reset all UI state when user clears data
+  useEffect(() => {
+    if (clearCount === 0) return
+    setHistory([])
+    setResult(null)
+    setAnalyzedClaim("")
+    setError(null)
+    setActiveHistoryId(undefined)
+  }, [clearCount])
 
   const toggleSidebar = () => setSidebarCollapsed((prev) => !prev)
 

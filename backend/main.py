@@ -153,13 +153,38 @@ async def analyse_claim(request: AnalysisRequest):
                 print(f"[Infodote] {_last_es_error}", flush=True)
             else:
                 query_vector = embed_model.encode(claim).tolist()
+                # Hybrid search: combines semantic vector (kNN) + BM25 keyword matching
+                # RRF (Reciprocal Rank Fusion) merges both result lists — claims ranking
+                # highly in both searches rise to the top.
                 search_query = {
-                    "knn": {
-                        "field": "vector",
-                        "query_vector": query_vector,
-                        "k": 5,
-                        "num_candidates": 100
-                    }
+                    "retriever": {
+                        "rrf": {
+                            "retrievers": [
+                                {
+                                    "standard": {
+                                        "query": {
+                                            "match": {
+                                                "claim": {
+                                                    "query": claim,
+                                                    "fuzziness": "AUTO"
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                {
+                                    "knn": {
+                                        "field": "vector",
+                                        "query_vector": query_vector,
+                                        "k": 10,
+                                        "num_candidates": 100
+                                    }
+                                }
+                            ],
+                            "rank_window_size": 20
+                        }
+                    },
+                    "size": 5
                 }
                 res = es.search(index="news_claims", body=search_query)
                 hits = res.get("hits", {}).get("hits", [])
@@ -175,6 +200,12 @@ async def analyse_claim(request: AnalysisRequest):
                         })
                     except Exception:
                         continue
+                # Normalize RRF scores to 0-1 range so the frontend % display is meaningful
+                if matches:
+                    max_score = max(m["score"] for m in matches) or 1.0
+                    for m in matches:
+                        m["score"] = m["score"] / max_score
+
                 n = len(matches)
                 if n == 0:
                     _last_es_error = "Index 'news_claims' exists but search returned 0 hits (empty index or wrong mapping?)."
@@ -218,7 +249,26 @@ async def analyse_claim(request: AnalysisRequest):
         ]
     }
     _analysis_cache[key] = response_payload
+
+    # Store analysis in Elasticsearch for Kibana dashboard
+    if es is not None:
+        try:
+            from datetime import datetime, timezone
+            es.index(index="claim_analyses", document={
+                **response_payload,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "sources": [s["source"] for s in response_payload["sources"]],
+            })
+        except Exception as e:
+            print(f"[Infodote] Failed to store analysis (non-fatal): {e}", flush=True)
+
     return AnalysisResponse(**response_payload)
+
+@app.post("/clear-cache")
+async def clear_cache():
+    """Clear the server-side analysis cache so claims are re-analysed fresh."""
+    _analysis_cache.clear()
+    return {"cleared": True}
 
 @app.get("/health")
 async def health_check():
