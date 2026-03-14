@@ -15,16 +15,20 @@ Infodote helps users analyze claims, detect misinformation techniques, and build
 
 ### Installation
 
+**The easiest way** to get started is to use the provided setup script, which automatically checks your environment, installs `pnpm` globally if necessary, and installs all frontend dependencies:
+
 ```bash
 # Clone the repository
 git clone https://github.com/LeeJieHeng/v0-infodote-frontend-plan.git
 cd v0-infodote-frontend-plan
 
-# Install dependencies
-npm install
+# Run the automated setup script
+chmod +x setup.sh
+./setup.sh
 
 # Start the development server
-npm run dev
+cd frontend
+pnpm dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
