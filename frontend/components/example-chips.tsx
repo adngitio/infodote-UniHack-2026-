@@ -18,13 +18,13 @@ const exampleClaims = [
 
 export function ExampleChips({ onSelect, className }: ExampleChipsProps) {
   return (
-    <div className={cn("flex flex-wrap gap-2", className)}>
-      <span className="text-sm text-muted-foreground mr-1">Try:</span>
+    <div className={cn("flex flex-wrap gap-2 items-center", className)}>
+      <span className="text-sm font-light text-neutral-500 mr-2">Try:</span>
       {exampleClaims.map((claim) => (
         <button
           key={claim}
           onClick={() => onSelect(claim)}
-          className="px-3 py-1.5 text-sm bg-secondary hover:bg-secondary/80 text-secondary-foreground rounded-full border border-border hover:border-primary/50 transition-all"
+          className="px-3 py-1.5 text-sm font-light bg-white/5 hover:bg-white/10 text-neutral-300 rounded-full border border-white/10 hover:border-white/30 transition-all"
         >
           {claim}
         </button>

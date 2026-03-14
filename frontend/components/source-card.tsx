@@ -29,19 +29,24 @@ export function SourceCard({
       target="_blank"
       rel="noopener noreferrer"
       className={cn(
-        "block p-4 rounded-lg bg-card border border-border hover:border-primary/50 transition-all group",
+        "block p-5 rounded-xl bg-white/5 border border-white/10 hover:border-white/30 transition-all group",
         className
       )}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <Shield className="h-4 w-4 text-primary flex-shrink-0" />
-            <span className="text-xs text-muted-foreground truncate">
+          <div className="flex items-center gap-2 mb-2">
+            <Shield className="h-3 w-3 text-neutral-500 flex-shrink-0" />
+            <span className="text-xs font-light text-neutral-500 truncate mt-px">
               {domain}
             </span>
+<<<<<<< Updated upstream
             <span className="text-xs text-primary bg-primary/10 px-2 py-0.5 rounded-full">
               {verdict}
+=======
+            <span className="text-[10px] text-white bg-white/10 border border-white/10 px-2 py-0.5 rounded-full font-medium tracking-wide">
+              {Math.round(relevanceScore * 100)}% match
+>>>>>>> Stashed changes
             </span>
             {matchPct != null && (
               <span className="ml-auto text-xs text-muted-foreground flex-shrink-0">
@@ -49,10 +54,10 @@ export function SourceCard({
               </span>
             )}
           </div>
-          <h4 className="font-medium text-foreground group-hover:text-primary transition-colors line-clamp-1">
+          <h4 className="text-sm font-medium text-white group-hover:text-neutral-300 transition-colors line-clamp-1">
             {title}
           </h4>
-          <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+          <p className="text-xs text-neutral-400 mt-1.5 line-clamp-2 font-light leading-relaxed">
             {snippet}
           </p>
           {matchPct != null && (
@@ -64,7 +69,7 @@ export function SourceCard({
             </div>
           )}
         </div>
-        <ExternalLink className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors flex-shrink-0 mt-1" />
+        <ExternalLink className="h-4 w-4 text-neutral-600 group-hover:text-white transition-colors flex-shrink-0 mt-1" />
       </div>
     </a>
   )
