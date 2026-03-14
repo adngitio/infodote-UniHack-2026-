@@ -1,7 +1,7 @@
 fastapi
-uvicorn
+uvicorn[standard]
+python-dotenv
+pydantic
 elasticsearch
 sentence-transformers
 anthropic
-python-dotenv
-
