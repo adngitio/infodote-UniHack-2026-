@@ -11,7 +11,6 @@ import { SettingsProvider, useSettings } from "@/lib/settings-context"
 import { Shield, Sparkles, Target, BookOpen } from "lucide-react"
 
 const HISTORY_KEY = "infodote_history"
-const COLLAPSED_KEY = "infodote_sidebar_collapsed"
 
 const quotes = [
   { text: "The unexamined life is not worth living.", author: "Socrates" },
@@ -54,22 +53,12 @@ function HomeInner() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const resultsRef = useRef<HTMLDivElement>(null)
 
-  // Load persisted state on mount
+  // Load persisted state on mount; sidebar always starts open on refresh/first open
   useEffect(() => {
     setHistory(loadHistory())
-    try {
-      const stored = localStorage.getItem(COLLAPSED_KEY)
-      if (stored !== null) setSidebarCollapsed(stored === "1")
-    } catch {}
   }, [])
 
-  const toggleSidebar = () => {
-    setSidebarCollapsed(prev => {
-      const next = !prev
-      try { localStorage.setItem(COLLAPSED_KEY, next ? "1" : "0") } catch {}
-      return next
-    })
-  }
+  const toggleSidebar = () => setSidebarCollapsed((prev) => !prev)
 
   const newAnalysis = () => {
     setResult(null)

@@ -103,7 +103,7 @@ export function SettingsPanel({ onClose, history, onClearHistory }: SettingsPane
                         fontSize === s ? "bg-neutral-800 text-white shadow-sm" : "text-neutral-500 hover:text-neutral-300"
                       )}
                     >
-                      {s.toUpperCase()}
+                      {({ sm: "Small", md: "Medium", lg: "Large" })[s]}
                     </button>
                   ))}
                 </div>
