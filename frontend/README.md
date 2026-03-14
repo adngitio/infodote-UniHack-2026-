@@ -87,14 +87,29 @@ infodote-frontend/
 
 ## Backend Integration
 
-The frontend currently uses mock data in `lib/api.ts`. To connect to your FastAPI backend:
+The frontend is wired to the Infodote FastAPI backend. To run the full stack:
 
-1. Open `lib/api.ts`
-2. Uncomment the fetch call in the `analyzeClaim` function
-3. Point it to your backend API endpoint
-4. Ensure your backend returns the `AnalysisData` interface format
+1. **Start the backend** (from repo root):
+   ```bash
+   cd backend
+   pip install -r requirements.txt
+   # Set .env with GEMINI_API_KEY, ELASTIC_URL, ELASTIC_API_KEY
+   uvicorn main:app --reload --host 0.0.0.0 --port 8000
+   ```
 
-See `DOCUMENTATION.md` for detailed integration instructions.
+2. **Start the frontend** (from repo root):
+   ```bash
+   cd frontend
+   npm install && npm run dev
+   ```
+
+3. **Optional:** To use a different API URL, create `frontend/.env.local` and set:
+   ```
+   NEXT_PUBLIC_API_URL=http://localhost:8000
+   ```
+   See `frontend/.env.example`.
+
+The frontend calls `POST /analyse` with `{ "claim": "..." }` and maps the backend response (verdict, technique, explanation, literacy_lesson, sources) to the UI. CORS is enabled on the backend for local development.
 
 ## Documentation
 

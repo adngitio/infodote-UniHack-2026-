@@ -14,22 +14,22 @@ const verdictConfig = {
   true: {
     label: "Verified True",
     icon: CheckCircle2,
-    className: "bg-primary/10 text-primary border-primary/30",
+    className: "bg-white/10 text-white border-white/20",
   },
   false: {
     label: "False",
     icon: XCircle,
-    className: "bg-destructive/10 text-destructive border-destructive/30",
+    className: "bg-white/5 text-neutral-400 border-white/10",
   },
   misleading: {
     label: "Misleading",
     icon: AlertTriangle,
-    className: "bg-warning/10 text-warning border-warning/30",
+    className: "bg-white/5 text-neutral-300 border-white/10",
   },
   unverified: {
     label: "Unverified",
     icon: HelpCircle,
-    className: "bg-muted text-muted-foreground border-border",
+    className: "bg-transparent text-neutral-500 border-white/10",
   },
 }
 
@@ -40,7 +40,7 @@ export function VerdictBadge({ verdict, className }: VerdictBadgeProps) {
   return (
     <div
       className={cn(
-        "inline-flex items-center gap-2 px-4 py-2 rounded-full border font-medium text-sm transition-all",
+        "inline-flex items-center gap-2 px-4 py-2 rounded-full border font-medium text-sm transition-all shadow-sm tracking-wide",
         config.className,
         className
       )}
