@@ -1,1 +1,7 @@
-# Add your Python dependencies here
+fastapi
+uvicorn
+elasticsearch
+sentence-transformers
+anthropic
+python-dotenv
+
