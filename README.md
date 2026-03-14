@@ -222,18 +222,4 @@ infodote-UniHack-2026-/
 └── README.md
 ```
 
----
-
-## Prize Targets
-
-**Best Use of Elastic Technology** — Elasticsearch is the architectural centrepiece. The hybrid search using RRF is a non-trivial implementation of Elasticsearch's native multi-retriever ranking system, combining semantic vector search and BM25 keyword matching simultaneously. The dual-index design (`news_claims` for retrieval, `claim_analyses` for analytics) demonstrates Elasticsearch as both a search engine and a data persistence layer. The Kibana dashboard completes the full Elastic stack story.
-
-**Quantium AI Solutions Prize** — Claude is central to every single analysis. Every submitted claim is sent to the Anthropic API with both the raw text and Elasticsearch-grounded context. Claude synthesises these into a structured verdict, explanation, and literacy lesson. The quality of the analysis is entirely Claude's work.
-
-**EU Shared Future Prize** — Democratic stability depends on citizens being able to distinguish reality from manufactured noise. Infodote addresses this at the individual level through the literacy lesson, and at the population level through the Kibana dashboard — where it is possible to see which manipulation techniques are most prevalent, how biased circulating claims are, and whether provocation is trending upward over time.
-
-**Most Creative Idea** — The antidote metaphor is structurally embedded in the product. Every analysis includes a literacy lesson not because it makes the tool more useful in the moment, but because it makes the user less dependent on the tool over time. A tool designed to make itself obsolete is the original idea.
-
----
-
 *Infodote — UniHack 2026*
