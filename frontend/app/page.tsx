@@ -11,17 +11,21 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false)
   const [result, setResult] = useState<AnalysisData | null>(null)
   const [analyzedClaim, setAnalyzedClaim] = useState("")
+  const [error, setError] = useState<string | null>(null)
 
   const handleAnalyze = async (claim: string) => {
     setIsLoading(true)
     setResult(null)
+    setError(null)
     setAnalyzedClaim(claim)
 
     try {
       const data = await analyzeClaim(claim)
       setResult(data)
-    } catch (error) {
-      console.error("Analysis failed:", error)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Analysis failed"
+      setError(message)
+      console.error("Analysis failed:", err)
     } finally {
       setIsLoading(false)
     }
@@ -81,6 +85,11 @@ export default function Home() {
         {/* Claim Input Section */}
         <section className="mb-8">
           <ClaimInput onSubmit={handleAnalyze} isLoading={isLoading} />
+          {error && !isLoading && (
+            <div className="mt-4 p-4 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive text-sm">
+              {error}
+            </div>
+          )}
           {!result && !isLoading && (
             <div className="mt-6">
               <ExampleChips onSelect={handleAnalyze} />
