@@ -156,7 +156,7 @@
   }
 }
 
-/* ── Font size scaling ───────────────────────────────── */
-[data-font="sm"] { font-size: 13px; }
-[data-font="md"] { font-size: 15px; }
-[data-font="lg"] { font-size: 17px; }
+/* ── Font size scaling (on root so rem-based text scales app-wide) ── */
+html[data-font="sm"] { font-size: 13px; }
+html[data-font="md"] { font-size: 15px; }
+html[data-font="lg"] { font-size: 17px; }

@@ -52,6 +52,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     if (saved.autoScroll !== undefined) setAutoScrollState(saved.autoScroll as boolean)
   }, [])
 
+  // Apply theme and font size to document root so whole app (and rem-based text) scales
+  useEffect(() => {
+    const root = document.documentElement
+    root.setAttribute("data-theme", theme)
+    root.setAttribute("data-font", fontSize)
+  }, [theme, fontSize])
+
   function persist(patch: Partial<SettingsContextValue>) {
     try {
       const current = load(SETTINGS_KEY, {} as Record<string, unknown>)

@@ -21,19 +21,24 @@ const quotes = [
   { text: "A wise man speaks because he has something to say; a fool because he has to say something.", author: "Plato" },
 ]
 
+function normalizeClaim(claim: string) {
+  return claim.trim().toLowerCase()
+}
+
 function loadHistory(): HistoryItem[] {
   try {
     const raw = localStorage.getItem(HISTORY_KEY)
     if (!raw) return []
     const parsed: HistoryItem[] = JSON.parse(raw)
-    // Deduplicate by ID to fix existing key conflicts
-    const unique = new Map<string, HistoryItem>()
+    // Deduplicate by claim text (keep first occurrence) so sidebar never shows duplicates
+    const byClaim = new Map<string, HistoryItem>()
     parsed.forEach(item => {
-      if (item.id && !unique.has(item.id)) {
-        unique.set(item.id, item)
+      if (item.id && item.claim) {
+        const key = normalizeClaim(item.claim)
+        if (!byClaim.has(key)) byClaim.set(key, item)
       }
     })
-    return Array.from(unique.values())
+    return Array.from(byClaim.values())
   } catch { return [] }
 }
 
@@ -58,7 +63,16 @@ function HomeInner() {
     setHistory(loadHistory())
   }, [])
 
-  // Reset all UI state when user clears data
+  // Re-sync sidebar when user clears cache (e.g. browser storage) and returns to the tab
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") setHistory(loadHistory())
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange)
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange)
+  }, [])
+
+  // Reset all UI state when user clears data via Settings
   useEffect(() => {
     if (clearCount === 0) return
     setHistory([])
@@ -86,7 +100,13 @@ function HomeInner() {
 
   useEffect(() => {
     if (!isLoading) return
-    const handler = () => cycleQuote()
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === " ") {
+        e.preventDefault()
+        e.stopPropagation()
+      }
+      cycleQuote()
+    }
     window.addEventListener("keydown", handler)
     return () => window.removeEventListener("keydown", handler)
   }, [isLoading, cycleQuote])
@@ -127,7 +147,9 @@ function HomeInner() {
       }
       
       setHistory(prev => {
-        const updated = [newItem, ...prev.slice(0, 19)]
+        const key = normalizeClaim(claim)
+        const withoutDuplicate = prev.filter(item => normalizeClaim(item.claim) !== key)
+        const updated = [newItem, ...withoutDuplicate.slice(0, 19)]
         saveHistory(updated)
         return updated
       })
